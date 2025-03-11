@@ -247,8 +247,9 @@ class Simulator:
             initial_conditions=None,
         ):
 
-        if initial_conditions is None:
-            initial_conditions = {
+        self.initial_conditions = initial_conditions
+        if self.initial_conditions is None:
+            self.initial_conditions = {
                 'p_x': 0.,
                 'p_y': 0.,
                 'p_z': 0.,
@@ -268,14 +269,14 @@ class Simulator:
         self.bullet_client.resetBasePositionAndOrientation(
             self.robot_id,
             [
-                initial_conditions['p_x'],
-                initial_conditions['p_y'],
-                initial_conditions['p_z'],
+                self.initial_conditions['p_x'],
+                self.initial_conditions['p_y'],
+                self.initial_conditions['p_z'],
             ],
             self.bullet_client.getQuaternionFromEuler([
-                initial_conditions['phi'],
-                initial_conditions['theta'],
-                initial_conditions['psi'],
+                self.initial_conditions['phi'],
+                self.initial_conditions['theta'],
+                self.initial_conditions['psi'],
             ]),
         )
 
@@ -287,17 +288,17 @@ class Simulator:
         # Set linear and angular velocity
         # - Define linear velocity in body frame
         v_body = np.array([
-            initial_conditions['v_x'],
-            initial_conditions['v_y'],
-            initial_conditions['v_z'],
+            self.initial_conditions['v_x'],
+            self.initial_conditions['v_y'],
+            self.initial_conditions['v_z'],
         ])
         # - Compute linear velocity in world frame
         v_world = R_body_in_world @ v_body
         # - Define angular velocity in body frame
         w_body = np.array([
-            initial_conditions['w_x'],
-            initial_conditions['w_y'],
-            initial_conditions['w_z'],
+            self.initial_conditions['w_x'],
+            self.initial_conditions['w_y'],
+            self.initial_conditions['w_z'],
         ])
         # - Compute angular velocity in world frame
         w_world = R_body_in_world @ w_body
@@ -315,6 +316,9 @@ class Simulator:
         # Update display
         self._update_display()
     
+    def get_initial_Conditions(self):
+        return self.initial_conditions
+
     def run(
             self,
             controller,

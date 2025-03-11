@@ -1,0 +1,64 @@
+import numpy as np
+import sympy as sym
+np.set_printoptions(suppress=True)
+
+w1, w2, w3, t1, t2 = sym.symbols('w1, w2, w3, t1, t2')
+
+J1 = 15.0
+J2 = 11.0
+J3 = 10.0
+
+w1e = 3.0
+w2e = 0.0
+w3e = 1.0
+t1e = 0.0
+t2e = 15.0
+
+wd1 = ((J2 - J3)*w2*w3 + t1)/J1
+wd2 = ((J3 - J1)*w3*w1 + t2)/J2
+wd3 = ((J1 - J2)*w1*w2 + 0.)/J3
+
+xd = sym.Matrix([wd1, wd2, wd3])
+
+A_num = sym.lambdify([w1, w2, w3, t1, t2], xd.jacobian([w1, w2, w3]))
+B_num = sym.lambdify([w1, w2, w3, t1, t2], xd.jacobian([t1, t2]))
+
+A = A_num(w1e, w2e, w3e, t1e, t2e)
+B = B_num(w1e, w2e, w3e, t1e, t2e)
+
+A = A.astype(float)
+B = B.astype(float)
+
+print(A.tolist())
+print(B.tolist())
+
+q1, v1, v2, t = sym.symbols('q1, v1, v2, t')
+
+J1 = 1.00000000
+J2 = 0.04500000
+mw = 0.25000000
+g = 9.81000000
+l = 1.50000000
+
+q1e = np.pi
+v1e = 0.0
+v2e = 0.0
+te  = 0.0
+
+qd1 = v1
+vd1 = (t - mw*g*l*sym.sin(q1))/J1
+vd2 = ((J2/J1)*mw*g*l*sym.sin(q1) - ((J1 + J2)/J1)*t)/J2
+
+xd = sym.Matrix([qd1, vd1, vd2])
+
+A_num = sym.lambdify([q1, v1, v2, t], xd.jacobian([q1, v1, v2]))
+B_num = sym.lambdify([q1, v1, v2, t], xd.jacobian([t]))
+
+A = A_num(q1e, v1e, v2e, te)
+B = B_num(q1e, v1e, v2e, te)
+
+A = A.astype(float)
+B = B.astype(float)
+
+print(A.tolist())
+print(B.tolist())

@@ -1,0 +1,115 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from shapely.geometry import Polygon, MultiPolygon
+from shapely.ops import unary_union, polygonize
+from scipy.spatial import Delaunay
+from sklearn.cluster import DBSCAN
+
+def alpha_shape(points, alpha):
+    if len(points) < 4:
+        # Not enough points to build a polygon
+        return Polygon(points)
+
+    def add_edge(edges, edge_points, coords, i, j):
+        if (i, j) in edges or (j, i) in edges:
+            # Already added
+            return
+        edges.add((i, j))
+        edge_points.append(coords[[i, j]])
+
+    coords = np.array(points)
+    tri = Delaunay(coords)
+
+    edges = set()
+    edge_points = []
+
+    # Loop through triangles:
+    # ia, ib, ic = indices of corner points of the triangle
+    for ia, ib, ic in tri.simplices:
+        pa = coords[ia]
+        pb = coords[ib]
+        pc = coords[ic]
+
+        # Lengths of sides of triangle
+        a = np.linalg.norm(pb - pc)
+        b = np.linalg.norm(pa - pc)
+        c = np.linalg.norm(pa - pb)
+
+        # Semiperimeter and area (Heron's formula)
+        s = (a + b + c) / 2.0
+        area = max(s * (s - a) * (s - b) * (s - c), 0)
+        area = np.sqrt(area)
+
+        # Circumradius calculation
+        if area == 0:
+            circum_r = np.inf
+        else:
+            circum_r = a * b * c / (4.0 * area)
+
+        if circum_r < 1.0 / alpha:
+            add_edge(edges, edge_points, coords, ia, ib)
+            add_edge(edges, edge_points, coords, ib, ic)
+            add_edge(edges, edge_points, coords, ic, ia)
+
+    # Build polygons from edges
+    m = polygonize(edge_points)
+    return unary_union(list(m))
+
+
+def draw_multiple_concave_boundaries(x, y, eps=0.145, min_samples=3, alpha=1.0):
+    points = np.column_stack((x, y))
+    
+    # Run DBSCAN clustering
+    clustering = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = clustering.fit_predict(points)
+    
+    # Unique labels (-1 is noise)
+    unique_labels = set(labels)
+    
+    plt.figure(figsize=(8, 6))
+    
+    for label in unique_labels:
+        if label == -1:
+            # Plot noise points
+            noise_points = points[labels == label]
+            plt.scatter(noise_points[:, 0], noise_points[:, 1], color='b', label='Noise', zorder=5)
+            continue
+        
+        cluster_points = points[labels == label]
+        
+        # Skip small clusters
+        if len(cluster_points) < 3:
+            continue
+        
+        # Compute concave hull (alpha shape)
+        concave_hull = alpha_shape(cluster_points, alpha=alpha)
+        
+        if concave_hull.is_empty:
+            continue
+        
+        # Handle both Polygon and MultiPolygon
+        if isinstance(concave_hull, Polygon):
+            xh, yh = concave_hull.exterior.xy
+            plt.fill(xh, yh, fc='#0000ff4d', ec='k', lw=2.0, label=f'Cluster {label}', zorder=4)
+        elif isinstance(concave_hull, MultiPolygon):
+            for poly in concave_hull:
+                xh, yh = poly.exterior.xy
+                plt.fill(xh, yh, fc='#0000ff4d', ec='k', lw=2.0, label=f'Cluster {label}', zorder=4)
+        
+        # Optionally plot the points inside
+        plt.scatter(cluster_points[:, 0], cluster_points[:, 1], c='b', edgecolor='k', zorder=5)
+    
+    plt.title("Multiple Concave Boundaries (Alpha Shapes + DBSCAN Clusters)")
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.legend()
+    plt.axis('equal')
+    plt.grid(True)
+    plt.show()
+
+# Your data
+x = [5.0, 4.7, 4.9, 5.1, 4.5, 5.1, 5.2, 5.3, 4.8, 4.9, 5.1, 5.2, 5.3, 5.4, 5.5, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 4.8, 4.9, 5.1, 5.2, 5.3, 5.4, 5.5, 5.1, 5.2, 5.3, 4.5, 4.7, 4.9, 5.1, 5.0]
+y = [0.5235987755982988, 0.41887902047863906, 0.41887902047863906, 0.41887902047863906, 0.3141592653589793, 0.20943951023931956, 0.20943951023931956, 0.20943951023931956, 0.10471975511965975, 0.10471975511965975, 0.10471975511965975, 0.10471975511965975, 0.10471975511965975, 0.10471975511965975, 0.10471975511965975, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1047197551196597, -0.1047197551196597, -0.1047197551196597, -0.1047197551196597, -0.1047197551196597, -0.1047197551196597, -0.1047197551196597, -0.2094395102393195, -0.2094395102393195, -0.2094395102393195, -0.3141592653589793, -0.4188790204786391, -0.4188790204786391, -0.4188790204786391, -0.5235987755982988]
+
+# Call the function
+draw_multiple_concave_boundaries(x, y, eps=0.145, min_samples=3, alpha=1.0)

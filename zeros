@@ -1,0 +1,205 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
+from scipy import ndimage
+from skimage import measure, morphology
+from skimage.measure import regionprops
+from scipy.spatial import ConvexHull, Delaunay, QhullError
+from sklearn.decomposition import PCA
+from shapely.ops import polygonize, unary_union
+from shapely.geometry import MultiLineString, Polygon as ShapelyPolygon, Point
+
+def plot_nonzero_points(array):
+    """
+    Plots points for each non-zero element in a 2D numpy array.
+
+    Parameters:
+    array (np.ndarray): A 2D numpy array of size 100x100
+    """
+    if array.shape != (100, 100):
+        raise ValueError("Input array must be of size 100x100")
+
+    # Find indices of non-zero elements
+    non_zero_indices = np.nonzero(array)
+    y_coords, x_coords = non_zero_indices
+
+    # Create the plot
+    plt.figure(figsize=(6, 6))
+    plt.scatter(x_coords, y_coords, marker='o', color='blue')
+    plt.title('Plot of Non-Zero Points')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.xlim(0,100)
+    plt.ylim(0,100)
+    #plt.gca()  # Optional: Invert Y-axis if you want (0,0) at the top-left
+    plt.grid(True)
+    plt.show()
+
+zz = np.zeros((100,100))
+for i in range(101):
+    for j in range(101):
+        if(i < 73 and i > 31 and j < 69 and j > 12):
+            zz[j,i] = 1.0
+
+for i in range(101):
+    for j in range(101):
+        if(i < 57 and i > 39 and j < 43 and j > 25):
+            zz[j,i] = 0.0
+
+zz[85, 51] = 1.0
+zz[84, 51] = 1.0
+zz[83, 50] = 1.0
+zz[82, 50] = 1.0
+
+zz[25, 12] = 1.0
+zz[25, 11] = 1.0
+zz[24, 12] = 1.0
+zz[24, 11] = 1.0
+
+zz[3, 3] = 1.0
+zz[4, 4] = 1.0
+zz[5, 5] = 1.0
+zz[6, 6] = 1.0
+zz[7, 7] = 1.0
+
+plot_nonzero_points(zz)
+
+def plot_filled_clumps(data):
+    """
+    Creates a fill plot for clumps of 1.0 in a 2D numpy array.
+    
+    Args:
+        data (numpy.ndarray): A 100x100 numpy array with elements 0.0 or 1.0.
+    """
+    # Label connected regions of 1.0
+    struc = np.ones((3,3), dtype=int)
+
+    labeled_array, num_features = ndimage.label(data, structure=struc)
+
+    # Create a plot
+    plt.figure(figsize=(6, 6))
+    
+    # Loop over each detected clump and plot it as a filled contour
+    for region_label in range(1, num_features + 1):
+        region_mask = (labeled_array == region_label)
+        
+        # Find the contours of the region to create a filled patch
+        plt.contourf(region_mask, levels=[0.5, 1.0], colors='blue')
+
+    plt.title('Plot of Non-Zero Points')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.xlim(0,100)
+    plt.ylim(0,100)
+    plt.grid(True)
+    plt.show()
+
+
+plot_filled_clumps(zz)
+
+def create_thin_rectangle(coords, thickness=0.5):
+    """
+    Create a thin rectangle around collinear points using PCA.
+    """
+    # PCA to find the line direction
+    pca = PCA(n_components=2)
+    pca.fit(coords)
+    
+    # Project points onto the first principal axis (line direction)
+    proj = coords @ pca.components_[0]
+    
+    # Find min and max projection to get the line endpoints
+    min_proj_idx = np.argmin(proj)
+    max_proj_idx = np.argmax(proj)
+    
+    endpoint1 = coords[min_proj_idx]
+    endpoint2 = coords[max_proj_idx]
+
+    # Get line vector
+    line_vec = endpoint2 - endpoint1
+
+    # Get perpendicular vector, normalize and scale by half thickness
+    perp_vec = np.array([-line_vec[1], line_vec[0]])
+    perp_vec = perp_vec / np.linalg.norm(perp_vec) * thickness / 2
+
+    # Four points of the rectangle
+    rect = np.array([
+        endpoint1 + perp_vec,
+        endpoint1 - perp_vec,
+        endpoint2 - perp_vec,
+        endpoint2 + perp_vec
+    ])
+
+    return rect[:, [1, 0]]  # Flip x and y for plotting (x, y)
+
+def plot_filled_clumps_with_collinear_support(data):
+    """
+    Creates a fill plot for clumps of 1.0 in a 2D numpy array, using 8-connectivity,
+    and fills regions using convex hulls or thin rectangles for collinear regions.
+    
+    Args:
+        data (numpy.ndarray): A 100x100 numpy array with elements 0.0 or 1.0.
+    """
+    # Define 8-connectivity structure
+    structure = np.ones((3, 3), dtype=int)
+
+    # Label connected regions
+    labeled_array, num_features = ndimage.label(data, structure=structure)
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    patches = []
+    colors = plt.cm.tab20(np.linspace(0, 1, num_features + 1))
+
+    for region_label in range(1, num_features + 1):
+        # Get region mask
+        region_mask = (labeled_array == region_label)
+
+        # Get coordinates of the region (y, x)
+        coords = np.column_stack(np.where(region_mask))
+
+        # Skip regions with only 1 point (nothing to fill)
+        if coords.shape[0] == 1:
+            continue
+
+        try:
+            # Try to compute the convex hull
+            hull = ConvexHull(coords)
+            hull_coords = coords[hull.vertices]
+
+            # Create a polygon from hull vertices (x, y)
+            polygon = Polygon(hull_coords[:, [1, 0]], closed=True)
+            patches.append(polygon)
+
+        except QhullError:
+            print(f"Collinear region detected (label {region_label}), handling as line/rectangle")
+
+            # Create a thin rectangle around the points
+            rect_coords = create_thin_rectangle(coords, thickness=0.5)
+            polygon = Polygon(rect_coords, closed=True)
+            patches.append(polygon)
+
+    # Create a PatchCollection for all the polygons
+    p = PatchCollection(patches, facecolor=colors[1:num_features + 1],
+                        edgecolor='black', linewidth=1, alpha=0.5)
+
+    ax.add_collection(p)
+
+    # Plot settings
+    ax.set_xlim(0, data.shape[1])
+    ax.set_ylim(data.shape[0], 0)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    ax.set_title(f"Filled Plot of {num_features} Clumps (With Collinear Handling)")
+    plt.title('Plot of Non-Zero Points')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.xlim(0,100)
+    plt.ylim(0,100)
+    plt.grid(True)
+    plt.show()
+
+
+plot_filled_clumps_with_collinear_support(zz)

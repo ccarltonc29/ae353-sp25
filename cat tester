@@ -1,0 +1,66 @@
+import numpy as np
+import sympy as sym
+import scipy.linalg
+
+ζ, θ, dζ, dθ, τ = sym.symbols('ζ, θ, dζ, dθ, τ')
+rw = 0.325
+mw = 2.4
+Jw = 0.12675
+rb = 0.3
+mb = 12.0
+Jb = 0.8
+g = 9.81
+M = sym.Matrix([[(Jw/(rw**2)) + mb + mw, mb*rb*sym.cos(θ)],[mb*rb*sym.cos(θ), Jb + mb*rb**2]])
+N = sym.Matrix([[-mb*rb*sym.sin(θ)*dθ**2],[-g*mb*rb*sym.sin(θ)]])
+F = sym.Matrix([[1/rw],[-1]])
+Minv = M.inv()
+dv = Minv*(F*τ - N)
+
+ds1 = sym.Matrix([dζ, dθ, dv[0], dv[1]])
+ds2 = sym.Matrix([dθ, dv[0], dv[1]])
+
+ζ_e = 0.0
+θ_e = 0.0
+dζ_e = 0.0
+dθ_e = 0.0
+τ_e = 0.0
+
+A1_num = sym.lambdify([ζ, θ, dζ, dθ, τ], ds1.jacobian([ζ, θ, dζ, dθ]))
+B1_num = sym.lambdify([ζ, θ, dζ, dθ, τ], ds1.jacobian([τ]))
+A2_num = sym.lambdify([θ, dζ, dθ, τ], ds2.jacobian([θ, dζ, dθ]))
+B2_num = sym.lambdify([θ, dζ, dθ, τ], ds2.jacobian([τ]))
+
+A1 = A1_num(ζ_e, θ_e, dζ_e, dθ_e, τ_e)
+B1 = B1_num(ζ_e, θ_e, dζ_e, dθ_e, τ_e)
+A2 = A2_num(θ_e, dζ_e, dθ_e, τ_e)
+B2 = B2_num(θ_e, dζ_e, dθ_e, τ_e)
+
+A1 = A1.astype(float)
+B1 = B1.astype(float)
+A2 = A2.astype(float)
+B2 = B2.astype(float)
+
+# Define LQR cost matrices (tuned for reasonable control effort)
+#Q1 = np.array([[2, 0, 0, 0], [0, 100, 0, 0], [0, 0, 25, 0], [0, 0, 0, 1]])  # State weighting
+#Q2 = np.array([[1, 0, 0], [0, 2, 0], [0, 0, 1]])  # State weighting
+#Q3 = np.array([[9, 0, 0, 0], [0, 100, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])  # State weighting
+#R = np.array([[1]])        # Control effort weighting
+
+Q1 = np.array([[1, 0, 0, 0], [0, -100, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])  # State weighting
+Q2 = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 1]])  # State weighting
+Q3 = np.array([[1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])  # State weighting
+R = np.array([[1]])        # Control effort weighting
+
+# Solve the Continuous-time Algebraic Riccati Equation (ARE)
+P1 = scipy.linalg.solve_continuous_are(A1, B1, Q1, R)
+P2 = scipy.linalg.solve_continuous_are(A2, B2, Q2, R)
+P3 = scipy.linalg.solve_continuous_are(A1, B1, Q3, R)
+
+# Compute LQR gain K
+K1 = np.linalg.inv(R) @ B1.T @ P1
+K2 = np.linalg.inv(R) @ B2.T @ P2
+K3 = np.linalg.inv(R) @ B1.T @ P3
+
+print("Computed LQR Gain K1:", K1)
+print("Computed LQR Gain K2:", K2)
+print("Computed LQR Gain K3:", K3)

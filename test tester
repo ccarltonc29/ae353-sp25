@@ -1,0 +1,89 @@
+import numpy as np
+import scipy.linalg
+import scipy.optimize
+
+# Given system matrices
+A = np.array([[0.0, 0.0, 1.0, 0.0], 
+              [0.0, 0.0, 0.0, 1.0], 
+              [0.0, -7.76744868, 0.0, 0.0], 
+              [0.0, 33.65894428, 0.0, 0.0]])
+
+B = np.array([[0.0], [0.0], [0.57335138], [-1.62982179]])
+
+# Define LQR cost matrices (tuned for reasonable control effort)
+Q = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 100]])  # State weighting
+R = np.array([[1]])        # Control effort weighting
+
+# Solve the Continuous-time Algebraic Riccati Equation (ARE)
+P = scipy.linalg.solve_continuous_are(A, B, Q, R)
+
+# Compute LQR gain K
+K_lqr = np.linalg.inv(R) @ B.T @ P
+
+# Define known elements of K
+K_fixed = np.full(K_lqr.shape, np.nan)
+K_fixed[0, 0] = -2.0
+K_fixed[0, 1] = -35.1973405
+
+# Get indices of fixed and free elements
+fixed_indices = ~np.isnan(K_fixed)
+free_indices = np.isnan(K_fixed)
+
+
+# Extract initial values for free elements from LQR solution
+K_initial = K_lqr.copy()
+free_values_initial = K_initial[free_indices]
+
+# Define test states to enforce input constraint |u| ≤ 5
+X_test = np.array([
+    [2.5, 0, 0, 0],   # Small deviation in position
+    [0, 0.142, 0, 0],   # Small pitch angle
+    [0, 0, 1.0, 0],   # Small velocity
+    [0, 0, 0, 0.5],   # Small pitch rate
+    [1.5, -0.1, -1., 0.1], # Mixed realistic scenario
+    [-2.5, 0.142, 1.25, -0.25]  # Another mixed scenario
+])
+
+# Define the cost function
+def cost_function(free_values):
+    # Reconstruct K with new free values
+    K_new = K_fixed.copy()
+    K_new[free_indices] = free_values
+    
+    # Compute new Riccati solution with modified K
+    P_new = scipy.linalg.solve_continuous_are(A - B @ K_new, B, Q, R)
+    
+    # Cost is trace(P) to ensure good performance
+    return np.trace(P_new)
+
+# Define constraint function for |u| ≤ 5
+def input_constraint(free_values):
+    # Reconstruct K with new free values
+    K_new = K_fixed.copy()
+    K_new[free_indices] = free_values
+
+    # Compute u for all test states
+    U_test = -K_new @ X_test.T  # Each column is u for a test state
+
+    # Constraint: Each element of U_test should be between -5 and 5
+    return 5 - np.max(np.abs(U_test))  # Must be ≥ 0 to be feasible
+
+# Optimize only free elements with input constraint
+result = scipy.optimize.minimize(cost_function, free_values_initial, method='SLSQP',
+                  constraints={'type': 'ineq', 'fun': input_constraint})
+
+# Reconstruct the optimized gain matrix
+K_opt = K_fixed.copy()
+K_opt[free_indices] = result.x
+
+# Print results
+print("Original LQR Gain Matrix:\n", K_lqr)
+print("Optimized K with constraints:\n", K_opt)
+
+#G = A - B@K_opt
+#print()
+#print(G)
+
+#es, eV = scipy.linalg.eig(G)
+#print()
+#print(es)

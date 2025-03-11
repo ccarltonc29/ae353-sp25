@@ -1,0 +1,49 @@
+import sympy as sym
+import numpy as np
+import scipy.linalg
+
+f, a, b, c = sym.symbols('f, a, b, c')
+wheel_position = 0.3
+cat_target = 0.1
+theta = 0.1
+
+def checkHit(wheel, cat, t0):
+    if(cat >= 0.0):
+        xf = 0.5*(0.7 - f)*np.sqrt(2)
+    else:
+        xf = 0.5*(-0.7 + f)*np.sqrt(2)
+    yf = 0.7 + 0.5*(0.7 - f)*np.sqrt(2)
+
+    xa = wheel - cat - 0.5*sym.cos(t0) + (0.7 + a)*sym.sin(t0)
+    ya = 0.5*sym.sin(t0) + (0.7 + a)*sym.cos(t0)
+
+    xb = wheel - cat + 0.7*sym.sin(t0) + (-0.5 + b)*sym.cos(t0)
+    yb = 0.7*sym.cos(t0) + (0.5 - b)*sym.sin(t0)
+
+    xc = wheel - cat + 0.5*sym.cos(t0) + (0.7 + c)*sym.sin(t0)
+    yc = -0.5*sym.sin(t0) + (0.7 + c)*sym.cos(t0)
+
+    solA = sym.solve([xf - xa, yf - ya], [f, a])
+    solB = sym.solve([xf - xb, yf - yb], [f, b])
+    solC = sym.solve([xf - xc, yf - yc], [f, c])
+
+    if(solA[a] <= 0.3 and solA[a] >= 0.0 and solA[f] <= 0.7 and solA[f] >= 0.0):
+        x = xf.subs(f, solA[f])
+        y = yf.subs(f, solA[f])
+        seg = 'A'
+    if(solB[b] <= 1.0 and solB[b] >= 0.0 and solB[f] <= 0.7 and solB[f] >= 0.0):
+        x = xf.subs(f, solB[f])
+        y = yf.subs(f, solB[f])
+        seg = 'B'
+    if(solC[c] <= 0.3 and solC[c] >= 0.0 and solC[f] <= 0.7 and solC[f] >= 0.0):
+        x = xf.subs(f, solC[f])
+        y = yf.subs(f, solC[f])
+        seg = 'C'
+    
+    L = sym.sqrt(x**2 + y**2)
+    alpha = sym.atan(y/x)
+    tau = L*np.sqrt(5000)*sym.sin(alpha - np.pi/4)
+    return [x,y,seg,tau]
+
+hit = checkHit(wheel_position, cat_target, theta)
+print(hit)
