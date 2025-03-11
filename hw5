@@ -1,0 +1,28 @@
+import numpy as np
+import sympy as sym
+from scipy import linalg as lin
+
+A = np.array([[-0.9, -0.1, 0.4, 0.3], [-0.2, -0.5, -0.2, -0.1], [0.7, 0.8, 0.1, 0.7], [-0.1, 0.6, -0.6, 0.6]])
+B = np.array([[0.0], [-0.8], [0.8], [0.6]])
+K1 = np.array([[-112.7, -619.6, -312.9, -380.5]])
+K2 = np.array([[-172.7, -953.4, -554.6, -503.9]])
+K3 = np.array([[-437.6, -6662.6, -5870.4, -1048.0]])
+K4 = np.array([[-1581.6, -33847.9, -29770.0, -5394.0]])
+K5 = np.array([[-327.3, -965.0, -349.6, -786.6]])
+
+F1 = A - B@K1
+F2 = A - B@K2
+F3 = A - B@K3
+F4 = A - B@K4
+F5 = A - B@K5
+
+s1 = lin.eigvals(F1)
+s2 = lin.eigvals(F2)
+s3 = lin.eigvals(F3)
+s4 = lin.eigvals(F4)
+s5 = lin.eigvals(F5)
+
+ss = np.array([s1, s2, s3, s4, s5])
+
+for i in range(5):
+    print((ss[i].real < 0).all())
